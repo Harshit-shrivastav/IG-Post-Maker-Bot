@@ -2,17 +2,27 @@ import logging
 import os
 from telethon import TelegramClient, events
 from PIL import Image, ImageDraw, ImageFont
+import google.generativeai as genai
 
 logging.basicConfig(level=logging.INFO)
 
 api_id = 'YOUR_API_ID'
 api_hash = 'YOUR_API_HASH'
 bot_token = 'YOUR_BOT_TOKEN'
-
+prompt = "You are a very talented instagram post captions generator, generate post caption for this image and also include hashtags."
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 
 font_path = '/assets/font.ttf'
 logo_path = '/assets/instagram_logo.png'
+
+async def get_image_caption(prompt, image):
+    try:
+        llm = genai.GenerativeModel('gemini-pro-vision')
+        response = await llm.generate_content([prompt, image])
+        return response.text
+    except Exception as e:
+        print(f"Error generating response with image: {e}")
+        return "Error generating caption."
 
 async def resize_image_for_instagram(image_path, output_path, size=(1080, 1080)):
     try:
@@ -99,7 +109,9 @@ async def handle_message(event):
             watermarked_image_path = 'watermarked_image.jpg'
             watermark_text = '@ConfessionsOfADev'
             await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
-            await client.send_file(event.chat_id, watermarked_image_path, caption='Here is your watermarked image!')
+            with open(watermarked_image_path, "rb") as img_file:
+                caption = await get_image_caption(prompt, img_file.read())
+            await client.send_file(event.chat_id, watermarked_image_path, caption=caption)
         except Exception as e:
             logging.error(f"Error processing image: {e}")
             await event.reply("Sorry, there was an error processing your image.")
