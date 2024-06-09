@@ -6,9 +6,10 @@ import google.generativeai as genai
 
 logging.basicConfig(level=logging.INFO)
 
-api_id = 'YOUR_API_ID'
-api_hash = 'YOUR_API_HASH'
-bot_token = 'YOUR_BOT_TOKEN'
+api_id = os.environ.get('API_ID')
+api_hash = os.environ.get('API_HASH')
+bot_token = os.environ.get('BOT_TOKEN')
+GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY')
 prompt = "You are a very talented instagram post captions generator, generate post caption for this image and also include hashtags."
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 
