@@ -160,7 +160,8 @@ async def handle_message(event):
             except Exception as e:
                 logging.error(f"Error cleaning up files: {e}")
 
-print("Bot has started.")
+print("Checking out instagram.")
 check_instagram_login()
+print("Bot Successfully started.")
 client.start()
 client.run_until_disconnected()
