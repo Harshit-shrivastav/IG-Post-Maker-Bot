@@ -48,9 +48,14 @@ async def add_transparent_watermark(image_path, watermark_text, logo_path, outpu
         watermark_layer = Image.new("RGBA", image.size, (255, 255, 255, 0))
         watermark_draw = ImageDraw.Draw(watermark_layer)
         
-        if font_path:
-            font = ImageFont.truetype(font_path, font_size)
-        else:
+        # Load the font, fallback to default if it fails
+        try:
+            if font_path:
+                font = ImageFont.truetype(font_path, font_size)
+            else:
+                font = ImageFont.load_default()
+        except Exception as e:
+            logging.error(f"Error loading font: {e}, falling back to default font.")
             font = ImageFont.load_default()
         
         logo = Image.open(logo_path).convert("RGBA")
