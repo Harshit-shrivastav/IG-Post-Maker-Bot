@@ -3,6 +3,7 @@ import os
 from telethon import TelegramClient, events
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
+from ensta import Mobile
 
 logging.basicConfig(level=logging.INFO)
 
@@ -10,6 +11,8 @@ api_id = os.environ.get('API_ID')
 api_hash = os.environ.get('API_HASH')
 bot_token = os.environ.get('BOT_TOKEN')
 GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY')
+INSTAGRAM_USERNAME = os.environ.get('INSTAGRAM_USERNAME')
+INSTAGRAM_PASSWORD = os.environ.get('INSTAGRAM_PASSWORD')
 prompt = "You are a very talented instagram post captions generator, generate post caption for this image and also include hashtags."
 
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
@@ -98,6 +101,25 @@ async def add_transparent_watermark(image_path, watermark_text, logo_path, outpu
         logging.error(f"Error adding watermark: {e}")
         raise
 
+def check_instagram_login():
+    try:
+        mobile = Mobile(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+        profile = mobile.profile(INSTAGRAM_USERNAME)
+        logging.info(f"Instagram login successful. Logged in as: {profile.full_name}")
+    except Exception as e:
+        logging.error(f"Error logging in to Instagram: {e}")
+        raise
+
+async def upload_to_instagram(image_path, caption):
+    try:
+        logging.info("Uploading image to Instagram.")
+        mobile = Mobile(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+        mobile.upload_photo(upload_id=image_path, caption=caption)
+        logging.info("Image uploaded to Instagram successfully.")
+    except Exception as e:
+        logging.error(f"Error uploading to Instagram: {e}")
+        raise
+
 @client.on(events.NewMessage(pattern='/start'))
 async def start(event):
     logging.info(f"Start command received from {event.sender_id}")
@@ -119,6 +141,7 @@ async def handle_message(event):
             with open(watermarked_image_path, "rb") as img_file:
                 caption = await get_image_caption(prompt, img_file.read())
             await client.send_file(event.chat_id, watermarked_image_path, caption=caption)
+            await upload_to_instagram(watermarked_image_path, caption)
         except Exception as e:
             logging.error(f"Error processing image: {e}")
             await event.reply("Sorry, there was an error processing your image.")
@@ -131,5 +154,6 @@ async def handle_message(event):
                 logging.error(f"Error cleaning up files: {e}")
 
 print("Bot has started.")
+check_instagram_login()
 client.start()
 client.run_until_disconnected()
