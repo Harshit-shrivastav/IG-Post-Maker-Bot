@@ -2,12 +2,14 @@ import logging
 import os
 import time
 import asyncio
+import json
+import threading
 from telethon import TelegramClient, events
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
 from instagrapi import Client
-import praw
-import requests
+import asyncpraw
+import aiohttp
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,25 +20,34 @@ bot_token = os.getenv('BOT_TOKEN')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
 INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')
-
-if not all([api_id, api_hash, bot_token, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD]):
-    raise EnvironmentError("Please set all required environment variables: API_ID, API_HASH, BOT_TOKEN, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD.")
-
-prompt = "You are a very talented Instagram post captions generator, generate post caption for this image and also include hashtags."
-
-client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
-
-font_path = 'assets/font.ttf'
-logo_path = 'assets/instagram_logo.png'
-
-# Reddit credentials
 reddit_client_id = os.getenv('REDDIT_CLIENT_ID')
 reddit_client_secret = os.getenv('REDDIT_CLIENT_SECRET')
 reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
 
-reddit = praw.Reddit(client_id=reddit_client_id,
-                     client_secret=reddit_client_secret,
-                     user_agent=reddit_user_agent)
+if not all([api_id, api_hash, bot_token, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD, reddit_client_id, reddit_client_secret, reddit_user_agent]):
+    raise EnvironmentError("Please set all required environment variables.")
+
+prompt = "You are a very talented Instagram post captions generator, generate post caption for this image and also include hashtags."
+client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
+font_path = 'assets/font.ttf'
+logo_path = 'assets/instagram_logo.png'
+posted_images_file = 'posted_images.json'
+
+reddit = asyncpraw.Reddit(
+    client_id=reddit_client_id,
+    client_secret=reddit_client_secret,
+    user_agent=reddit_user_agent
+)
+
+def load_posted_images():
+    if os.path.exists(posted_images_file):
+        with open(posted_images_file, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_posted_images(posted_images):
+    with open(posted_images_file, 'w') as f:
+        json.dump(posted_images, f)
 
 async def get_image_caption(prompt, image):
     try:
@@ -139,107 +150,74 @@ async def upload_to_instagram(image_path, caption):
         logging.error(f"Error uploading to Instagram: {e}")
         raise
 
-def fetch_latest_images(subreddit_name, count=3):
-    subreddit = reddit.subreddit(subreddit_name)
-    images = []
+async def fetch_latest_image(subreddit_name):
+    subreddit = await reddit.subreddit(subreddit_name)
+    async for submission in subreddit.new(limit=10):
+        if submission.url.endswith(('.jpg', '.jpeg', '.png')):
+            return submission.url
+    return None
 
-    for submission in subreddit.new(limit=10):
-        if submission.url.endswith(('.jpg', '.jpeg', '.png')) and len(images) < count:
-            images.append(submission.url)
+async def download_image(url, output_path):
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    with open(output_path, 'wb') as f:
+                        f.write(await response.read())
+                    logging.info(f'Downloaded {url} to {output_path}')
+                    return output_path
+    except aiohttp.ClientError as e:
+        logging.error(f"Error downloading image: {e}")
+    return None
 
-    return images
-
-def download_images(urls, subreddit_name):
-    if not os.path.exists(subreddit_name):
-        os.makedirs(subreddit_name)
-
-    image_paths = []
-    for idx, url in enumerate(urls):
-        response = requests.get(url)
-        if response.status_code == 200:
-            image_path = os.path.join(subreddit_name, f'image_{idx + 1}.jpg')
-            with open(image_path, 'wb') as f:
-                f.write(response.content)
-            logging.info(f'Downloaded {url} to {image_path}')
-            image_paths.append(image_path)
-    return image_paths
-
-async def process_reddit_images():
+async def process_reddit_image():
     communities = ['pics', 'earthporn', 'aww']
+    posted_images = load_posted_images()
     
     for community in communities:
-        logging.info(f'Fetching images from r/{community}...')
-        image_urls = fetch_latest_images(community, count=3)
-        if image_urls:
-            image_paths = download_images(image_urls, community)
-            for image_path in image_paths:
-                try:
-                    resized_image_path = 'resized_image.jpg'
-                    await resize_image_for_instagram(image_path, resized_image_path)
-                    watermarked_image_path = 'watermarked_image.jpg'
-                    watermark_text = '@ConfessionsOfADev'
-                    await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
-                    image_pil = Image.open(watermarked_image_path)
-                    caption = await get_image_caption(prompt, image_pil)
-                    await upload_to_instagram(watermarked_image_path, caption)
-                except Exception as e:
-                    logging.error(f"Error processing image {image_path}: {e}")
-                finally:
-                    try:
-                        os.remove(image_path)
-                        os.remove(resized_image_path)
-                        os.remove(watermarked_image_path)
-                    except Exception as e:
-                        logging.error(f"Error cleaning up files: {e}")
-        else:
-            logging.info(f'No images found in r/{community}.')
-
-@client.on(events.NewMessage(pattern='/start'))
-async def start(event):
-    logging.info(f"Start command received from {event.sender_id}")
-    await event.reply('Send me a photo and I will resize it for Instagram and add a watermark!')
-
-@client.on(events.NewMessage(incoming=True))
-async def handle_message(event):
-    if event.photo:
-        sender = await event.get_sender()
-        sender_id = sender.id
+        logging.info(f'Fetching image from r/{community}...')
         try:
-            logging.info(f"Downloading photo from user {sender_id}")
-            photo_path = await client.download_media(event.photo, file=f'{sender_id}_photo.jpg')
-            resized_image_path = 'resized_image.jpg'
-            await resize_image_for_instagram(photo_path, resized_image_path)
-            watermarked_image_path = 'watermarked_image.jpg'
-            watermark_text = '@ConfessionsOfADev'
-            await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
-            image_pil = Image.open(watermarked_image_path)
-            caption = await get_image_caption(prompt, image_pil)
-            await client.send_file(event.chat_id, watermarked_image_path, caption=caption)
-            await upload_to_instagram(watermarked_image_path, caption)
+            image_url = await fetch_latest_image(community)
+            if image_url and image_url not in posted_images:
+                image_path = 'downloaded_image.jpg'
+                image_path = await download_image(image_url, image_path)
+                if image_path:
+                    try:
+                        resized_image_path = 'resized_image.jpg'
+                        await resize_image_for_instagram(image_path, resized_image_path)
+                        watermarked_image_path = 'watermarked_image.jpg'
+                        watermark_text = '@ConfessionsOfADev'
+                        await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
+                        image_pil = Image.open(watermarked_image_path)
+                        caption = await get_image_caption(prompt, image_pil)
+                        await upload_to_instagram(watermarked_image_path, caption)
+                        posted_images.append(image_url)
+                        save_posted_images(posted_images)
+                        break
+                    except Exception as e:
+                        logging.error(f"Error processing image {image_path}: {e}")
+                    finally:
+                        try:
+                            os.remove(image_path)
+                            os.remove(resized_image_path)
+                            os.remove(watermarked_image_path)
+                        except Exception as e:
+                            logging.error(f"Error cleaning up files: {e}")
         except Exception as e:
-            logging.error(f"Error processing image: {e}")
-            await event.reply("Sorry, there was an error processing your image.")
-        finally:
-            try:
-                os.remove(photo_path)
-                os.remove(resized_image_path)
-                os.remove(watermarked_image_path)
-            except Exception as e:
-                logging.error(f"Error cleaning up files: {e}")
+            logging.error(f"Error fetching image from r/{community}: {e}")
 
-def schedule_reddit_images():
+async def run_periodically():
     while True:
-        asyncio.run(process_reddit_images())
-        time.sleep(14400)  # 4 hours
+        await process_reddit_image()
+        await asyncio.sleep(14400)  # Sleep for 4 hours
 
-print("Checking out instagram.")
+print("Checking out Instagram.")
 check_instagram_login()
 print("Bot Successfully started.")
 
-# Schedule the Reddit image processing
-import threading
-reddit_thread = threading.Thread(target=schedule_reddit_images)
-reddit_thread.start()
+# Schedule the Reddit image processing in an asynchronous way
+loop = asyncio.get_event_loop()
+loop.create_task(run_periodically())
 
-client.start()
+# Start the Telegram client
 client.run_until_disconnected()
