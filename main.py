@@ -167,7 +167,7 @@ async def download_image(url, output_path):
     return None
 
 async def process_reddit_image():
-    communities = ['pics', 'earthporn', 'aww']
+    communities = ['programmingmemes', 'ProgrammerHumor']
     posted_images = load_posted_images()
     
     for community in communities:
