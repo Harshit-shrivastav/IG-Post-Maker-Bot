@@ -14,8 +14,8 @@ prompt = "You are a very talented instagram post captions generator, generate po
 
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 
-font_path = '/assets/font.ttf'
-logo_path = '/assets/instagram_logo.png'
+font_path = 'assets/font.ttf'
+logo_path = 'assets/instagram_logo.png'
 
 async def get_image_caption(prompt, image):
     try:
