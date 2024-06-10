@@ -56,7 +56,7 @@ async def get_image_caption(prompt, image):
         return response.text
     except Exception as e:
         logging.error(f"Error generating response with image: {e}")
-        return "Error generating caption."
+        return "#ConfessionsOfADev #memes #programming #programming_memes #coding"
 
 async def resize_image_for_instagram(image_path, output_path, size=(1080, 1080)):
     try:
@@ -171,7 +171,7 @@ async def download_image(url, output_path):
     return None
 
 async def process_reddit_image():
-    communities = ['pics', 'earthporn', 'aww']
+    communities = ['programmingmemes', 'ProgrammerHumor']
     posted_images = load_posted_images()
     
     for community in communities:
@@ -209,15 +209,13 @@ async def process_reddit_image():
 async def run_periodically():
     while True:
         await process_reddit_image()
-        await asyncio.sleep(14400)  # Sleep for 4 hours
+        await asyncio.sleep(14400) 
 
 print("Checking out Instagram.")
 check_instagram_login()
 print("Bot Successfully started.")
 
-# Schedule the Reddit image processing in an asynchronous way
 loop = asyncio.get_event_loop()
 loop.create_task(run_periodically())
 
-# Start the Telegram client
 client.run_until_disconnected()
