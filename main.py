@@ -207,14 +207,9 @@ async def process_reddit_image():
             logging.error(f"Error fetching image from r/{community}: {e}")
 
 def run_periodically():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        while True:
-            loop.run_until_complete(process_reddit_image())
-            time.sleep(14400)  # Sleep for 4 hours
-    finally:
-        loop.close()
+    asyncio.run(process_reddit_image())
+    time.sleep(14400)  # Sleep for 4 hours
+    run_periodically()
 
 print("Checking out Instagram.")
 check_instagram_login()
