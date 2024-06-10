@@ -157,13 +157,16 @@ async def fetch_latest_image(subreddit_name):
     return None
 
 async def download_image(url, output_path):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                with open(output_path, 'wb') as f:
-                    f.write(await response.read())
-                logging.info(f'Downloaded {url} to {output_path}')
-                return output_path
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    with open(output_path, 'wb') as f:
+                        f.write(await response.read())
+                    logging.info(f'Downloaded {url} to {output_path}')
+                    return output_path
+    except aiohttp.ClientError as e:
+        logging.error(f"Error downloading image: {e}")
     return None
 
 async def process_reddit_image():
@@ -172,48 +175,51 @@ async def process_reddit_image():
     
     for community in communities:
         logging.info(f'Fetching image from r/{community}...')
-        image_url = await fetch_latest_image(community)
-        if image_url and image_url not in posted_images:
-            image_path = 'downloaded_image.jpg'
-            image_path = await download_image(image_url, image_path)
-            if image_path:
-                try:
-                    resized_image_path = 'resized_image.jpg'
-                    await resize_image_for_instagram(image_path, resized_image_path)
-                    watermarked_image_path = 'watermarked_image.jpg'
-                    watermark_text = '@ConfessionsOfADev'
-                    await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
-                    image_pil = Image.open(watermarked_image_path)
-                    caption = await get_image_caption(prompt, image_pil)
-                    await upload_to_instagram(watermarked_image_path, caption)
-                    posted_images.append(image_url)
-                    save_posted_images(posted_images)
-                    break
-                except Exception as e:
-                    logging.error(f"Error processing image {image_path}: {e}")
-                finally:
+        try:
+            image_url = await fetch_latest_image(community)
+            if image_url and image_url not in posted_images:
+                image_path = 'downloaded_image.jpg'
+                image_path = await download_image(image_url, image_path)
+                if image_path:
                     try:
-                        os.remove(image_path)
-                        os.remove(resized_image_path)
-                        os.remove(watermarked_image_path)
+                        resized_image_path = 'resized_image.jpg'
+                        await resize_image_for_instagram(image_path, resized_image_path)
+                        watermarked_image_path = 'watermarked_image.jpg'
+                        watermark_text = '@ConfessionsOfADev'
+                        await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
+                        image_pil = Image.open(watermarked_image_path)
+                        caption = await get_image_caption(prompt, image_pil)
+                        await upload_to_instagram(watermarked_image_path, caption)
+                        posted_images.append(image_url)
+                        save_posted_images(posted_images)
+                        break
                     except Exception as e:
-                        logging.error(f"Error cleaning up files: {e}")
+                        logging.error(f"Error processing image {image_path}: {e}")
+                    finally:
+                        try:
+                            os.remove(image_path)
+                            os.remove(resized_image_path)
+                            os.remove(watermarked_image_path)
+                        except Exception as e:
+                            logging.error(f"Error cleaning up files: {e}")
+        except Exception as e:
+            logging.error(f"Error fetching image from r/{community}: {e}")
 
-def schedule_reddit_image():
+def run_periodically():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    while True:
-        loop.run_until_complete(process_reddit_image())
-        time.sleep(14400)  # Sleep for 4 hours
+    try:
+        while True:
+            loop.run_until_complete(process_reddit_image())
+            time.sleep(14400)  # Sleep for 4 hours
+    finally:
+        loop.close()
 
 print("Checking out Instagram.")
 check_instagram_login()
 print("Bot Successfully started.")
 
 # Schedule the Reddit image processing
-import threading
-reddit_thread = threading.Thread(target=schedule_reddit_image)
-reddit_thread.start()
+threading.Thread(target=run_periodically, name="RedditImageScheduler", daemon=True).start()
 
-client.start()
 client.run_until_disconnected()
