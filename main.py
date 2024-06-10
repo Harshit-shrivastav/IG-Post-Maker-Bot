@@ -12,7 +12,6 @@ import aiohttp
 
 logging.basicConfig(level=logging.INFO)
 
-# Ensure the environment variables are set
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
 INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
 INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')
