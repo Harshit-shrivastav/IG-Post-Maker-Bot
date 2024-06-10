@@ -12,7 +12,7 @@ import aiohttp
 
 logging.basicConfig(level=logging.INFO)
 
-
+# Ensure the environment variables are set
 api_id = os.getenv('API_ID')
 api_hash = os.getenv('API_HASH')
 bot_token = os.getenv('BOT_TOKEN')
@@ -26,7 +26,7 @@ reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
 if not all([api_id, api_hash, bot_token, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD, reddit_client_id, reddit_client_secret, reddit_user_agent]):
     raise EnvironmentError("Please set all required environment variables.")
 
-prompt = "You are a very talented Instagram post captions generator, generate post caption for this image and also include hashtags and Note that don't say anything like 'sure i can generate' or 'here your caption' etc be specific to the point and only send captions."
+prompt = "You are a very talented Instagram post captions generator, generate post caption for this image and also include hashtags."
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 font_path = 'assets/font.ttf'
 logo_path = 'assets/instagram_logo.png'
@@ -55,7 +55,7 @@ async def get_image_caption(prompt, image):
         return response.text
     except Exception as e:
         logging.error(f"Error generating response with image: {e}")
-        return "#ConfessionsOfADev"
+        return "Error generating caption."
 
 async def resize_image_for_instagram(image_path, output_path, size=(1080, 1080)):
     try:
@@ -167,7 +167,7 @@ async def download_image(url, output_path):
     return None
 
 async def process_reddit_image():
-    communities = ['programmingmemes', 'ProgrammerHumor']
+    communities = ['pics', 'earthporn', 'aww']
     posted_images = load_posted_images()
     
     for community in communities:
@@ -200,12 +200,15 @@ async def process_reddit_image():
                         logging.error(f"Error cleaning up files: {e}")
 
 def schedule_reddit_image():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     while True:
-        asyncio.run(process_reddit_image())
+        loop.run_until_complete(process_reddit_image())
         time.sleep(14400)  # Sleep for 4 hours
 
 print("Checking out Instagram.")
 check_instagram_login()
+print("Bot Successfully started.")
 
 # Schedule the Reddit image processing
 import threading
