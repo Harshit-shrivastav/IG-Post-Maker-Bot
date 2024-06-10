@@ -3,7 +3,7 @@ import os
 from telethon import TelegramClient, events
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
-from ensta import Mobile
+from instagrapi import Client
 
 logging.basicConfig(level=logging.INFO)
 
@@ -108,8 +108,9 @@ async def add_transparent_watermark(image_path, watermark_text, logo_path, outpu
 
 def check_instagram_login():
     try:
-        mobile = Mobile(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        profile = mobile.profile(INSTAGRAM_USERNAME)
+        cl = Client()
+        cl.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+        profile = cl.account_info()
         logging.info(f"Instagram login successful. Logged in as: {profile.full_name}")
     except Exception as e:
         logging.error(f"Error logging in to Instagram: {e}")
@@ -118,8 +119,9 @@ def check_instagram_login():
 async def upload_to_instagram(image_path, caption):
     try:
         logging.info("Uploading image to Instagram.")
-        mobile = Mobile(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        mobile.upload_photo(upload_id=image_path, caption=caption)
+        cl = Client()
+        cl.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+        cl.photo_upload(image_path, caption)
         logging.info("Image uploaded to Instagram successfully.")
     except Exception as e:
         logging.error(f"Error uploading to Instagram: {e}")
