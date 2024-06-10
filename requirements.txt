@@ -2,3 +2,4 @@ telethon
 Pillow
 google-generativeai
 ensta
+instagrapi
