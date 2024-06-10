@@ -209,6 +209,7 @@ async def process_reddit_image():
 async def run_periodically():
     while True:
         await process_reddit_image()
+        print("Sleeping for 4 hours, i will post a new post after 4 hours.")
         await asyncio.sleep(14400) 
 
 print("Checking out Instagram.")
