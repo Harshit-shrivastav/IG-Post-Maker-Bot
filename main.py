@@ -3,6 +3,7 @@ import os
 import time
 import asyncio
 import json
+import threading
 from telethon import TelegramClient, events
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
