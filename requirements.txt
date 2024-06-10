@@ -3,3 +3,4 @@ Pillow
 google-generativeai
 ensta
 instagrapi
+praw
