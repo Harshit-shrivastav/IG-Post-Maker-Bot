@@ -27,7 +27,7 @@ reddit_user_agent = os.getenv('REDDIT_USER_AGENT')
 if not all([api_id, api_hash, bot_token, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD, reddit_client_id, reddit_client_secret, reddit_user_agent]):
     raise EnvironmentError("Please set all required environment variables.")
 
-prompt = "You are a very talented Instagram post captions generator, generate post caption for this image and also include hashtags."
+prompt = "You are a very talented Instagram post captions generator, generate post caption for this image and also include hashtags also Note that don't say anything like 'sure here is your caption' or 'here is your caption' etc, be specific and just send the caption only."
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
 font_path = 'assets/font.ttf'
 logo_path = 'assets/instagram_logo.png'
