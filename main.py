@@ -7,12 +7,17 @@ from ensta import Mobile
 
 logging.basicConfig(level=logging.INFO)
 
-api_id = os.environ.get('API_ID')
-api_hash = os.environ.get('API_HASH')
-bot_token = os.environ.get('BOT_TOKEN')
-GOOGLE_API_KEY = os.environ.get('GOOGLE_API_KEY')
-INSTAGRAM_USERNAME = os.environ.get('INSTAGRAM_USERNAME')
-INSTAGRAM_PASSWORD = os.environ.get('INSTAGRAM_PASSWORD')
+# Ensure the environment variables are set
+api_id = os.getenv('API_ID')
+api_hash = os.getenv('API_HASH')
+bot_token = os.getenv('BOT_TOKEN')
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+INSTAGRAM_USERNAME = os.getenv('INSTAGRAM_USERNAME')
+INSTAGRAM_PASSWORD = os.getenv('INSTAGRAM_PASSWORD')
+
+if not all([api_id, api_hash, bot_token, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD]):
+    raise EnvironmentError("Please set all required environment variables: API_ID, API_HASH, BOT_TOKEN, GOOGLE_API_KEY, INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD.")
+
 prompt = "You are a very talented instagram post captions generator, generate post caption for this image and also include hashtags."
 
 client = TelegramClient('bot', api_id, api_hash).start(bot_token=bot_token)
