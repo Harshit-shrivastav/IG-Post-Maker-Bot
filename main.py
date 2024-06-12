@@ -4,14 +4,15 @@ import time
 import asyncio
 import json
 import threading
-import asyncpraw
-import aiohttp
-import schedule
-import pickle
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 import google.generativeai as genai
 from instagrapi import Client
+from instagrapi.exceptions import ChallengeRequired
+import asyncpraw
+import aiohttp
+import schedule
+import pickle
 
 logging.basicConfig(level=logging.INFO)
 
@@ -75,11 +76,26 @@ def login_instagram():
     session = get_session()
     if session is None:
         client = Client()
-        client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
-        save_session(client)
+        try:
+            client.login(INSTAGRAM_USERNAME, INSTAGRAM_PASSWORD)
+            save_session(client)
+        except ChallengeRequired as e:
+            print(f"Challenge required: {e}")
+            handle_challenge(client)
         return client
     else:
         return session
+
+def handle_challenge(client):
+    challenge_url = client.last_json.get('challenge', {}).get('url')
+    if challenge_url:
+        choice = input("Enter 1 to verify via email or 0 to verify via phone: ")
+        client.challenge_resolve(challenge_url, choice)
+        code = input("Enter the code sent to your device: ")
+        client.challenge_code(challenge_url, code)
+        save_session(client)
+    else:
+        raise Exception("Challenge URL not found")
 
 client = login_instagram()
 
@@ -165,19 +181,22 @@ async def add_transparent_watermark(image_path, watermark_text, logo_path, outpu
 
 async def upload_to_instagram(image_path, caption):
     try:
-        logging.info("Uploading image to Instagram.")
-        client.photo_upload(image_path, caption)
+        await client.photo_upload(image_path, caption)
         logging.info("Image uploaded to Instagram successfully.")
     except Exception as e:
-        logging.error(f"Error uploading to Instagram: {e}")
+        logging.error(f"Error uploading image to Instagram: {e}")
         raise
 
-async def fetch_latest_image(subreddit_name):
-    subreddit = await reddit.subreddit(subreddit_name)
-    async for submission in subreddit.new(limit=10):
-        if submission.url.endswith(('.jpg', '.jpeg', '.png')):
-            return submission.url
-    return None
+async def fetch_image_from_reddit(subreddit_name):
+    try:
+        subreddit = await reddit.subreddit(subreddit_name)
+        async for submission in subreddit.hot(limit=10):
+            if submission.url.endswith(('.jpg', '.png')):
+                return submission.url
+        return None
+    except Exception as e:
+        logging.error(f"Error fetching image from r/{subreddit_name}: {e}")
+        raise
 
 async def download_image(url, output_path):
     try:
@@ -186,75 +205,42 @@ async def download_image(url, output_path):
                 if response.status == 200:
                     with open(output_path, 'wb') as f:
                         f.write(await response.read())
-                    logging.info(f'Downloaded {url} to {output_path}')
+                    logging.info(f"Image downloaded from {url}")
                     return output_path
-    except aiohttp.ClientError as e:
+                else:
+                    logging.error(f"Failed to download image from {url}")
+                    return None
+    except Exception as e:
         logging.error(f"Error downloading image: {e}")
-    return None
+        raise
 
 async def process_reddit_image():
-    communities = ['pics', 'earthporn', 'aww']
+    communities = ["pics", "earthporn", "aww"]
     posted_images = load_posted_images()
-    
+
     for community in communities:
-        logging.info(f'Fetching image from r/{community}...')
+        logging.info(f"Fetching image from r/{community}...")
         try:
-            image_url = await fetch_latest_image(community)
+            image_url = await fetch_image_from_reddit(community)
             if image_url and image_url not in posted_images:
-                image_path = 'downloaded_image.jpg'
-                image_path = await download_image(image_url, image_path)
+                logging.info(f"New image found: {image_url}")
+                image_path = await download_image(image_url, "downloaded_image.jpg")
                 if image_path:
+                    resized_image_path = await resize_image_for_instagram(image_path, "resized_image.jpg")
+                    watermarked_image_path = await add_transparent_watermark(resized_image_path, "MyWatermark", logo_path, "watermarked_image.jpg", font_path)
                     try:
-                        resized_image_path = 'resized_image.jpg'
-                        await resize_image_for_instagram(image_path, resized_image_path)
-                        watermarked_image_path = 'watermarked_image.jpg'
-                        watermark_text = '@ConfessionsOfADev'
-                        await add_transparent_watermark(resized_image_path, watermark_text, logo_path, watermarked_image_path, font_path=font_path)
-                        image_pil = Image.open(watermarked_image_path)
-                        caption = await get_image_caption(prompt, image_pil)
+                        caption = await get_image_caption(prompt, watermarked_image_path)
                         await upload_to_instagram(watermarked_image_path, caption)
                         posted_images.append(image_url)
                         save_posted_images(posted_images)
-                        break
                     except Exception as e:
-                        logging.error(f"Error processing image {image_path}: {e}")
-                    finally:
-                        try:
-                            os.remove(image_path)
-                            os.remove(resized_image_path)
-                            os.remove(watermarked_image_path)
-                        except Exception as e:
-                            logging.error(f"Error cleaning up files: {e}")
+                        logging.error(f"Error processing and uploading image: {e}")
+                else:
+                    logging.error(f"Failed to download image from {image_url}")
+            else:
+                logging.info(f"No new images found in r/{community}")
         except Exception as e:
             logging.error(f"Error fetching image from r/{community}: {e}")
-
-async def follow_user(user):
-    try:
-        await client.user_follow(user.pk)
-        follow_log = load_follow_log()
-        follow_log[user.username] = {'followed_at': datetime.now().isoformat(), 'followed_back': False}
-        save_follow_log(follow_log)
-        logging.info(f"Followed {user.username}")
-    except Exception as e:
-        logging.error(f"Error following user {user.username}: {e}")
-
-async def follow_users():
-    try:
-        suggestions = await client.user_suggested()
-        followed_count = 0
-        follow_log = load_follow_log()
-
-        for user in suggestions:
-            if followed_count >= 5:
-                break
-            if user.username not in follow_log:
-                await follow_user(user)
-                followed_count += 1
-                await asyncio.sleep(720)  # 12 minutes in seconds
-
-        logging.info(f"Followed {followed_count} new users in this hour")
-    except Exception as e:
-        logging.error(f"Error in follow_users: {e}")
 
 def check_unfollow_users():
     try:
@@ -278,6 +264,34 @@ def check_unfollow_users():
         save_follow_log(updated_log)
     except Exception as e:
         logging.error(f"Error in check_unfollow_users: {e}")
+
+async def follow_user(user):
+    try:
+        client.user_follow(user.pk)
+        follow_log = load_follow_log()
+        follow_log[user.username] = {'followed_at': datetime.now().isoformat(), 'followed_back': False}
+        save_follow_log(follow_log)
+        logging.info(f"Followed user: {user.username}")
+    except Exception as e:
+        logging.error(f"Error following user {user.username}: {e}")
+
+async def follow_users():
+    try:
+        suggestions = await client.user_suggested()
+        followed_count = 0
+        follow_log = load_follow_log()
+
+        for user in suggestions:
+            if followed_count >= 5:
+                break
+            if user.username not in follow_log:
+                await follow_user(user)
+                followed_count += 1
+                await asyncio.sleep(720)  # 12 minutes in seconds
+
+        logging.info(f"Followed {followed_count} new users in this hour")
+    except Exception as e:
+        logging.error(f"Error in follow_users: {e}")
 
 async def follow_scheduler():
     while True:
