@@ -159,11 +159,11 @@ async def fetch_latest_image(subreddit_name):
 
 async def download_image(url, output_path):
     try:
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession() as session:  # Use async context manager properly
             async with session.get(url) as response:
                 if response.status == 200:
                     with open(output_path, 'wb') as f:
-                        f.write(await response.read())
+                        f.write(await response.read())  # Await the reading of response
                     logging.info(f'Downloaded {url} to {output_path}')
                     return output_path
     except aiohttp.ClientError as e:
