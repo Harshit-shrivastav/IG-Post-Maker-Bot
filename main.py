@@ -214,7 +214,7 @@ async def process_reddit_image():
     for community in communities:
         logging.info(f"Fetching image from r/{community}...")
         try:
-            image_url = await fetch_image_from_reddit(community)
+            image_url = await fetch_latest_image(community)
             if image_url and image_url not in posted_images:
                 logging.info(f"New image found: {image_url}")
                 image_path = await download_image(image_url, "downloaded_image.jpg")
