@@ -186,26 +186,26 @@ async def upload_to_instagram(image_path, caption):
     except Exception as e:
         logging.error(f"Error uploading image to Instagram: {e}")
         raise
-
-async def fetch_image_from_reddit(subreddit_name):
-    async with reddit.subreddit(subreddit_name) as subreddit:
-        async for submission in subreddit.hot(limit=10):
-            if submission.url.endswith(('.jpg', '.png')):
-                return submission.url
+        
+async def fetch_latest_image(subreddit_name):
+    subreddit = await reddit.subreddit(subreddit_name)
+    async for submission in subreddit.new(limit=10):
+        if submission.url.endswith(('.jpg', '.jpeg', '.png')):
+            return submission.url
     return None
 
 async def download_image(url, output_path):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                with open(output_path, 'wb') as f:
-                    f.write(await response.read())
-                logging.info(f"Image downloaded from {url}")
-                return output_path
-            else:
-                logging.error(f"Failed to download image from {url}")
-                return None
-
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status == 200:
+                    with open(output_path, 'wb') as f:
+                        f.write(await response.read())
+                    logging.info(f'Downloaded {url} to {output_path}')
+                    return output_path
+    except aiohttp.ClientError as e:
+        logging.error(f"Error downloading image: {e}")
+    return None
 
 async def process_reddit_image():
     communities = ["pics", "earthporn", "aww"]
