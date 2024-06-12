@@ -214,13 +214,25 @@ async def process_reddit_image():
     for community in communities:
         logging.info(f"Fetching image from r/{community}...")
         try:
-            image_url = await fetch_latest_image(community)
+            try:
+                image_url = await fetch_latest_image(community)
+            except:
+                print("error 220")
             if image_url and image_url not in posted_images:
                 logging.info(f"New image found: {image_url}")
-                image_path = await download_image(image_url, "downloaded_image.jpg")
+                try:
+                    image_path = await download_image(image_url, "downloaded_image.jpg")
+                except:
+                    print("error 226")
                 if image_path:
-                    resized_image_path = await resize_image_for_instagram(image_path, "resized_image.jpg")
-                    watermarked_image_path = await add_transparent_watermark(resized_image_path, "MyWatermark", logo_path, "watermarked_image.jpg", font_path)
+                    try:
+                        resized_image_path = await resize_image_for_instagram(image_path, "resized_image.jpg")
+                    except:
+                        print("error 231")
+                    try:
+                        watermarked_image_path = await add_transparent_watermark(resized_image_path, "MyWatermark", logo_path, "watermarked_image.jpg", font_path)
+                    except:
+                        print("error 235")
                     try:
                         caption = await get_image_caption(prompt, watermarked_image_path)
                         await upload_to_instagram(watermarked_image_path, caption)
