@@ -194,7 +194,6 @@ def fetch_latest_images(subreddit_name, count=3):
     for submission in subreddit.new(limit=10):
         if submission.url.endswith(('.jpg', '.jpeg', '.png')) and len(images) < count:
             images.append(submission.url)
-
     return images
 
 
