@@ -187,12 +187,16 @@ async def upload_to_instagram(image_path, caption):
         logging.error(f"Error uploading image to Instagram: {e}")
         raise
         
-async def fetch_latest_image(subreddit_name):
-    subreddit = await reddit.subreddit(subreddit_name)
-    async for submission in subreddit.new(limit=10):
-        if submission.url.endswith(('.jpg', '.jpeg', '.png')):
-            return submission.url
-    return None
+def fetch_latest_images(subreddit_name, count=3):
+    subreddit = reddit.subreddit(subreddit_name)
+    images = []
+
+    for submission in subreddit.new(limit=10):
+        if submission.url.endswith(('.jpg', '.jpeg', '.png')) and len(images) < count:
+            images.append(submission.url)
+
+    return images
+
 
 async def download_image(url, output_path):
     try:
